@@ -63,18 +63,48 @@ Evaluate the diff against every applicable category below. Skip categories that 
 
 ### Correctness & Logic
 
+**General:**
 - Off-by-one errors, incorrect boundary conditions
-- Race conditions in async code (Python `asyncio`, React state updates, concurrent API calls)
-- Null/undefined/None not handled where data could be missing
-- Error paths that swallow exceptions or fail silently
-- Incorrect type narrowing or type assertions that hide bugs
-- State mutations where immutability is expected (React state, Redux)
 - Boolean logic errors (De Morgan's law violations, inverted conditions)
+- Error paths that swallow exceptions or fail silently
 - Resource leaks: unclosed connections, file handles, event listeners, subscriptions
+- Incorrect error propagation — catching broad exceptions and losing context
+- Assumptions about ordering in unordered collections (dicts, sets, Maps)
+- Integer overflow, floating-point comparison (`0.1 + 0.2 !== 0.3`), or precision loss
+- Copy vs reference bugs — shallow copies of nested objects, unintended aliasing
+
+**Python:**
+- Mutable default arguments (`def f(x=[])`) — shared across calls
+- Late binding closures in loops (`lambda` or nested functions capturing loop variable by reference)
+- `is` vs `==` confusion — `is` for identity, `==` for equality (except `None` checks)
+- Generator exhaustion — iterating a generator twice silently yields nothing the second time
+- `except Exception` catching too broadly, masking `KeyboardInterrupt`, `SystemExit`
+- Missing `__all__` or wildcard imports polluting namespaces
+- Incorrect `super()` usage in multiple inheritance (MRO issues)
+- `datetime` without timezone awareness — naive datetimes compared to aware ones
+
+**JavaScript/TypeScript:**
+- `==` vs `===` — loose equality coercion bugs
+- `typeof null === 'object'` — null checks using typeof
+- Race conditions in async code — `await` in loops vs `Promise.all`, unhandled rejections
+- Null/undefined not handled where data could be missing
+- Incorrect type narrowing or type assertions that hide bugs
+- State mutations where immutability is expected (React state, Redux, frozen objects)
+- `this` binding loss — class methods passed as callbacks without binding or arrow functions
+- `for...in` on arrays (iterates keys as strings, includes prototype properties)
+- `parseInt` without radix — `parseInt('08')` pitfalls
+- Async/await error handling — missing try/catch, unhandled promise rejections in event handlers
 
 ---
 
 ### Performance
+
+**General:**
+- Algorithmic complexity — O(n^2) or worse where O(n) or O(n log n) is possible
+- String concatenation in loops instead of joining/building
+- Repeated computation that should be cached or memoized
+- Unnecessary data copying — deep clones where shallow would suffice, spreading large objects
+- Premature optimization that hurts readability without measurable benefit
 
 **Python:**
 - N+1 query patterns — missing `select_related`/`prefetch_related` (Django) or `joinedload`/`selectinload` (SQLAlchemy)
@@ -83,14 +113,23 @@ Evaluate the diff against every applicable category below. Skip categories that 
 - Expensive operations inside loops that could be batched
 - Missing database indexes for columns used in filters/joins
 - Large objects loaded into memory when streaming would work
+- List comprehensions where generators would avoid materializing large sequences
+- Using `+` for string concatenation in loops instead of `str.join()` or f-strings
+- Repeated dictionary/attribute lookups in tight loops — hoist to local variable
+- Creating regex objects inside loops instead of compiling once
+- `in` checks against lists where a set would give O(1) lookup
 
-**TypeScript/React:**
+**JavaScript/TypeScript:**
 - Missing or incorrect `useMemo`/`useCallback` dependencies
 - Components re-rendering unnecessarily — objects/arrays created in render, missing `React.memo` for expensive children
 - Fetching data in components without caching/deduplication (missing React Query, SWR, etc.)
 - Bundle size: importing entire libraries when a specific import would work (`import _ from 'lodash'` vs `import groupBy from 'lodash/groupBy'`)
 - Event listeners or subscriptions without cleanup in `useEffect`
 - Expensive computations on the main thread that could be deferred
+- DOM thrashing — reading layout properties then writing in a loop
+- Creating new objects/arrays/functions on every render as props to child components
+- `Array.forEach` with async callbacks — doesn't await, use `for...of` or `Promise.all`
+- Spreading large arrays/objects repeatedly in reduce patterns
 
 ---
 
@@ -160,14 +199,75 @@ Evaluate the diff against every applicable category below. Skip categories that 
 
 ---
 
+### Error Handling
+
+**General:**
+- Bare/empty exception handlers that swallow errors silently
+- Error messages that don't include enough context to diagnose the problem
+- Inconsistent error handling strategies within the same module
+- Missing cleanup in error paths (finally blocks, context managers, try/catch/finally)
+- Errors returned as data (magic return values like `-1` or `null`) instead of thrown/raised
+
+**Python:**
+- Bare `except:` or `except Exception:` without re-raising or logging
+- Not using context managers (`with`) for resources that need cleanup
+- Raising `Exception` instead of specific exception types
+- f-string formatting inside logger calls that runs even when log level is disabled
+- Missing `from` in `raise NewError() from original` — loses the exception chain
+
+**JavaScript/TypeScript:**
+- `.catch()` at the end of a promise chain that swallows the error
+- `try/catch` wrapping too much code — unclear what's expected to fail
+- Error objects without useful messages (`throw new Error()` with no message)
+- Async functions that neither await nor return promises (fire-and-forget without intent)
+- Missing error boundaries in React component trees
+
+---
+
+### Concurrency & Async
+
+**Python:**
+- Mixing `async` and sync code incorrectly — blocking the event loop with sync I/O
+- Missing `asyncio.gather` for independent concurrent operations done sequentially
+- Thread safety issues — shared mutable state without locks
+- Not using `async with` for async context managers
+- `asyncio.create_task` without holding a reference (task can be garbage collected)
+
+**JavaScript/TypeScript:**
+- Sequential `await` for independent operations — should use `Promise.all`
+- `Promise.all` where `Promise.allSettled` is needed (one rejection kills all)
+- Missing `AbortController` for cancellable fetch/async operations
+- Stale closure bugs — async callbacks referencing outdated state
+- Race conditions between `useEffect` cleanup and async completion
+
+---
+
 ### Maintainability
 
+**General:**
 - Functions or methods doing too many things (> ~30 lines is a smell, not a rule)
 - Duplicated logic that should be extracted
 - Naming that doesn't communicate intent
 - Dead code, commented-out code, or TODO comments without linked issues
 - Magic numbers or strings that should be named constants
 - Inconsistent patterns compared to the rest of the codebase
+- Deep nesting (> 3 levels) — consider early returns, guard clauses, or extraction
+- Boolean parameters that change behavior — consider separate functions or options objects
+- Implicit coupling between modules via shared global state
+
+**Python:**
+- Not using dataclasses, NamedTuples, or Pydantic models for structured data — passing around raw dicts/tuples
+- `*args`/`**kwargs` pass-through that obscures the actual interface
+- Circular imports or import-time side effects
+- Missing `__repr__` or `__str__` on classes that appear in logs or debugging
+- Using `os.path` when `pathlib.Path` would be cleaner
+
+**JavaScript/TypeScript:**
+- Callback hell or deeply nested `.then()` chains — should use async/await
+- Object shapes used repeatedly without a type/interface definition
+- Default exports mixed with named exports inconsistently
+- Barrel files (`index.ts`) re-exporting everything — hurts tree-shaking and creates circular dependency risks
+- Implicit dependencies on import order or side effects
 
 ---
 

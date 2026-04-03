@@ -7,12 +7,14 @@ A Claude Code skill plugin for deep code reviews across the Ansible engineering 
 The `/review` skill performs a structured code review covering:
 
 - **Security** — injection, auth gaps, secrets exposure, OWASP patterns
-- **Correctness** — race conditions, null handling, logic errors, resource leaks
-- **Performance** — N+1 queries, unbounded fetches, unnecessary re-renders, bundle size
-- **Framework patterns** — Django ORM, FastAPI dependencies, React hooks, TypeScript types
+- **Correctness** — mutable defaults, closure bugs, equality pitfalls, type coercion, generator exhaustion
+- **Performance** — N+1 queries, algorithmic complexity, unbounded fetches, re-renders, bundle size
+- **Error handling** — swallowed exceptions, missing context managers, unhandled rejections, exception chaining
+- **Concurrency** — async/sync mixing, sequential awaits, stale closures, thread safety, race conditions
+- **Framework patterns** — Django ORM, FastAPI dependencies, SQLAlchemy sessions, React hooks, TypeScript types
 - **API design** — contract consistency, status codes, validation, migrations
 - **Testing** — coverage gaps, flaky patterns, mock overuse
-- **Maintainability** — duplication, naming, dead code, codebase consistency
+- **Maintainability** — duplication, naming, dead code, deep nesting, circular imports, implicit coupling
 
 Findings are grouped by severity (blocker / should fix / suggestion) with file references and concrete fixes.
 
