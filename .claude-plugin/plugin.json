@@ -1,0 +1,19 @@
+{
+  "name": "ansible-code-review",
+  "description": "Deep code review skill for Python (Django, FastAPI, SQLAlchemy), React, and TypeScript projects. Covers security, performance, correctness, and framework-specific anti-patterns.",
+  "version": "0.1.0",
+  "author": {
+    "name": "Matthew Jones"
+  },
+  "license": "MIT",
+  "keywords": [
+    "code-review",
+    "python",
+    "django",
+    "fastapi",
+    "react",
+    "typescript",
+    "security",
+    "performance"
+  ]
+}
