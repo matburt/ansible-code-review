@@ -2,15 +2,71 @@
 
 A Claude Code skill plugin for deep code reviews across the Ansible engineering stack: Python (Django, FastAPI, SQLAlchemy/SQLModel), React, and TypeScript.
 
-## What it does
+## How it works
 
-The `/review` skill performs a structured, multi-phase code review:
-
-1. **Gathers context** — reads PR description, linked issues, project rules (CLAUDE.md, etc.), checks PR size
-2. **Loads relevant guides** — only loads language-specific reference guides for file types in the diff
-3. **Reviews against checklists** — security, correctness, performance, error handling, concurrency, framework patterns, API design, testing, maintainability
-4. **Validates findings** — verifies each issue is real, introduced by this change, and not a false positive
-5. **Reports with severity** — blocker, should fix, nit, suggestion, learning
+```
+                              /review 522
+                                  │
+                    ┌─────────────┴──────────────┐
+                    │     CONTEXT GATHERING       │
+                    │  PR description & metadata  │
+                    │  Project rules (CLAUDE.md)  │
+                    │  Change classification      │
+                    │  PR size check              │
+                    └─────────────┬──────────────┘
+                                  │
+                    ┌─────────────┴──────────────┐
+                    │    LOAD LANGUAGE GUIDES     │
+                    │  ┌───────┐ ┌────────────┐  │
+                    │  │ *.py  │ │ *.ts *.tsx  │  │
+                    │  │guides │ │  guides    │  │
+                    │  └───┬───┘ └─────┬──────┘  │
+                    │      └─────┬─────┘         │
+                    │       general.md            │
+                    │       (always loaded)       │
+                    └─────────────┬──────────────┘
+                                  │
+              ┌───────────────────┼───────────────────┐
+              │                   │                   │
+    ┌─────────┴────────┐ ┌───────┴────────┐ ┌────────┴─────────┐
+    │   AGENT 1        │ │   AGENT 2      │ │   AGENT 3        │
+    │   Bug & Logic    │ │   Security &   │ │   Design &       │
+    │                  │ │   Performance  │ │   Maintainability │
+    │ • Correctness    │ │ • Injection    │ │ • API contracts   │
+    │ • Null handling  │ │ • Auth gaps    │ │ • Migrations      │
+    │ • Race conditions│ │ • N+1 queries  │ │ • Test coverage   │
+    │ • Type errors    │ │ • Sync-in-async│ │ • Framework       │
+    │ • Language       │ │ • XSS / CSRF   │ │   anti-patterns   │
+    │   pitfalls       │ │ • Bundle size  │ │ • Project rules   │
+    └─────────┬────────┘ └───────┬────────┘ └────────┬─────────┘
+              │                   │                   │
+              │      (run in parallel)                │
+              │                   │                   │
+              └───────────────────┼───────────────────┘
+                                  │
+                    ┌─────────────┴──────────────┐
+                    │   VALIDATE & DEDUPLICATE    │
+                    │                            │
+                    │  • Merge duplicate findings │
+                    │  • Verify against context   │
+                    │  • Drop pre-existing issues │
+                    │  • Check project rules      │
+                    │  • Confirm with surrounding │
+                    │    code before reporting    │
+                    └─────────────┬──────────────┘
+                                  │
+                    ┌─────────────┴──────────────┐
+                    │       FINAL REPORT          │
+                    │                            │
+                    │  Summary                   │
+                    │  ├── Blockers              │
+                    │  ├── Should fix            │
+                    │  ├── Nits                  │
+                    │  ├── Suggestions           │
+                    │  └── Learning              │
+                    │  Verdict: approve/request  │
+                    └────────────────────────────┘
+```
 
 ## Usage
 
@@ -20,6 +76,18 @@ The `/review` skill performs a structured, multi-phase code review:
 /review src/api/auth.py     # Review a specific file
 /review feature/my-branch   # Diff branch against main
 ```
+
+## Parallel Subagent Architecture
+
+The review launches **3 independent agents in parallel**, each focused on a different class of issues:
+
+| Agent | Focus | What it catches |
+|-------|-------|-----------------|
+| Bug & Logic | Correctness | Null handling, race conditions, off-by-one, type errors, mutable defaults, closure bugs, equality pitfalls |
+| Security & Performance | Risk & speed | Injection, auth gaps, secrets, XSS, N+1 queries, sync-in-async, unbounded fetches, bundle size, re-renders |
+| Design & Maintainability | Structure & standards | Breaking API changes, missing migrations, test gaps, framework anti-patterns, project rule violations, duplication |
+
+Independent agents catch issues that a single-pass review would miss — each brings a different lens to the same code. Findings are then **deduplicated** (multiple agents may spot the same issue) and **validated** against surrounding context before reporting.
 
 ## Stack Coverage
 
@@ -36,7 +104,7 @@ The skill uses **progressive disclosure** to minimize context window usage:
 
 ```
 skills/review/
-├── SKILL.md                          # Core workflow (~120 lines)
+├── SKILL.md                          # Core workflow + agent orchestration
 └── reference/
     ├── general.md                    # Cross-language patterns (always loaded)
     ├── python.md                     # Python, Django, FastAPI, SQLAlchemy
@@ -48,7 +116,8 @@ Only guides relevant to the changed files are loaded. A pure Python PR won't loa
 
 ## Key Features
 
-- **False-positive filtering** — every finding is validated against surrounding code, pre-existing state, and project conventions before reporting
+- **Parallel subagent review** — 3 agents analyze the diff independently from different perspectives, then findings are merged and validated
+- **False-positive filtering** — every finding is verified against surrounding code, pre-existing state, and project conventions before reporting
 - **Progressive loading** — language guides load on demand, keeping the core skill lean
 - **Severity labels** — blocker, should fix, nit, suggestion, learning — so authors know what's blocking vs. informational
 - **Concrete fixes** — findings include code examples, not just descriptions of problems
