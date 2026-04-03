@@ -72,39 +72,52 @@ Always load [general.md](reference/general.md) — it covers cross-language patt
 
 Each guide contains detailed checklists with code examples. Use them as your review rubric.
 
-## Step 3. Review
+## Step 3. Parallel review with subagents
 
-Evaluate the diff against every applicable category in the loaded guides. Skip categories that don't apply.
+Launch **parallel review agents** to independently analyze the diff from different perspectives. Each agent gets the full diff, the PR title/description, any project rules found in Step 1, and the relevant reference guides from Step 2.
 
-**Categories to check** (details in reference guides):
-- Security
-- Correctness & logic (language-specific pitfalls)
-- Performance
-- Error handling
-- Concurrency & async
-- Framework-specific patterns
-- API design & data modeling
-- Testing
-- Maintainability
-- Project rules compliance (from CLAUDE.md or similar files found in Step 1)
+Launch these agents **in parallel** using the Agent tool:
 
-## Step 4. Validate findings
+### Agent 1: Bug & Logic Review
+> You are reviewing a code diff for correctness bugs. Focus on the diff itself and the immediate surrounding context. Flag only issues you are confident are real — logic errors, null/undefined handling, race conditions, off-by-one errors, resource leaks, type errors, and language-specific pitfalls. Do NOT flag style issues, potential issues that depend on unknown runtime state, or pre-existing problems. For each finding, state the file, line(s), what the bug is, and why it will produce wrong results. Use the reference guides provided for language-specific pitfalls.
 
-**This step is critical.** Before reporting any finding, verify it:
+### Agent 2: Security & Performance Review
+> You are reviewing a code diff for security vulnerabilities and performance problems. For security: look for injection vectors, hardcoded secrets, missing auth checks, XSS, insecure deserialization, and sensitive data exposure. For performance: look for N+1 queries, unbounded fetches, blocking sync calls in async contexts, O(n²) patterns, missing indexes, and unnecessary re-renders. Only flag issues introduced or worsened by this change. For each finding, state the file, line(s), what the issue is, the impact, and a concrete fix. Use the reference guides provided.
+
+### Agent 3: Design & Maintainability Review
+> You are reviewing a code diff for API design, data modeling, testing, and maintainability. Check for: breaking API changes, missing migrations, incorrect status codes, missing validation, missing tests for new logic, duplicated code, poor naming, deep nesting, framework anti-patterns (check the reference guides), and violations of any project rules (CLAUDE.md, AGENTS.md). Only flag issues introduced by this change. For each finding, state the file, line(s), what the issue is, and a suggestion. Use the reference guides provided.
+
+Each agent should return a structured list of findings. Each finding must include:
+- File and line number(s)
+- Description of the issue
+- Why it matters (impact)
+- Severity: blocker, should-fix, nit, suggestion, or learning
+- Suggested fix (if clear)
+
+## Step 4. Validate and deduplicate
+
+After all agents return, review their combined findings:
+
+### Deduplicate
+Multiple agents may flag the same issue. Merge duplicates, keeping the most complete description.
+
+### Validate each finding
+**This step is critical.** For each finding, verify it:
 
 - **Read the surrounding code** — does context explain why the code is written this way?
 - **Check if it's pre-existing** — is this issue in the diff, or was it already there? Only flag issues introduced or worsened by this change.
 - **Confirm it's real** — if you're not confident the issue is genuine, don't flag it. False positives erode trust and waste reviewer time.
 - **Check project rules** — is there a lint-ignore comment, a documented exception, or a project convention that explains the pattern?
 
-**Do NOT flag:**
+**Drop findings that are:**
 - Pre-existing issues not made worse by this change
 - Code style or formatting issues (linters handle this)
-- Issues you cannot verify without extensive external context
+- Issues you cannot verify without reading extensive external context
 - Speculative concerns that depend on unknown runtime conditions
 - Patterns explicitly silenced via ignore comments or project conventions
+- Duplicate findings already covered by another (keep the better one)
 
-If a finding doesn't survive validation, drop it.
+If you are uncertain whether a finding is valid, read the relevant file to confirm before including or dropping it.
 
 ## Step 5. Format the review
 
